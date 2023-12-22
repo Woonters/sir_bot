@@ -22,7 +22,7 @@ use std::{
 use urlencoding::encode;
 
 #[group]
-#[commands(about, say, sayq, join)]
+#[commands(about, say, sayq, join, leave)]
 struct General;
 
 struct Handler;
