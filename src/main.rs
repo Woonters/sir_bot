@@ -1,26 +1,38 @@
 use reqwest::get;
-use serenity::async_trait;
-use serenity::framework::standard::{
-    macros::{command, group},
-    CommandResult, Configuration, StandardFramework,
+use serenity::{
+    all::Ready,
+    async_trait,
+    client::Context,
+    framework::standard::{
+        macros::{command, group},
+        CommandResult, Configuration, StandardFramework,
+    },
+    model::channel::Message,
+    prelude::*,
 };
-use serenity::model::channel::Message;
-use serenity::prelude::*;
+use songbird::{
+    events::{Event, EventContext, EventHandler as VoiceEventHandler, TrackEvent},
+    SerenityInit,
+};
 use std::{
     env,
     fs::File,
-    io::{stdin, Write},
+    io::{stdin, Read, Write},
 };
 use urlencoding::encode;
 
 #[group]
-#[commands(ping, say)]
+#[commands(about, say, sayq, join)]
 struct General;
 
 struct Handler;
 
 #[async_trait]
-impl EventHandler for Handler {}
+impl EventHandler for Handler {
+    async fn ready(&self, _: Context, ready: Ready) {
+        println!("{} is connected", ready.user.name);
+    }
+}
 
 #[tokio::main]
 async fn main() {
@@ -33,6 +45,7 @@ async fn main() {
     let mut client = Client::builder(token, intents)
         .event_handler(Handler)
         .framework(framework)
+        .register_songbird()
         .await
         .expect("Failed creating discord client");
     if let Err(why) = client.start().await {
@@ -44,27 +57,124 @@ async fn main() {
 }
 
 #[command]
-async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
-    tokio::task::spawn_blocking(|| {
-        let text = fix_input(&get_input());
-        get_voice_and_save(&text);
-    })
-    .await
-    .expect("Task Panicked");
-    msg.reply(ctx, format!("Pong - {}", msg.content)).await?;
+async fn join(ctx: &Context, msg: &Message) -> CommandResult {
+    let (guild_id, channel_id) = {
+        let guild = msg.guild(&ctx.cache).unwrap();
+        let channel_id = guild
+            .voice_states
+            .get(&msg.author.id)
+            .and_then(|voice_state| voice_state.channel_id);
+
+        (guild.id, channel_id)
+    };
+
+    let connect_to = match channel_id {
+        Some(channel) => channel,
+        None => {
+            (msg.reply(ctx, "Not in a voice channel").await);
+
+            return Ok(());
+        }
+    };
+
+    let manager = songbird::get(ctx)
+        .await
+        .expect("Songbird Voice client placed in at initialisation.")
+        .clone();
+
+    if let Ok(handler_lock) = manager.join(guild_id, connect_to).await {
+        // Attach an event handler to see notifications of all track errors.
+        let mut handler = handler_lock.lock().await;
+        handler.add_global_event(TrackEvent::Error.into(), TrackErrorNotifier);
+    }
+
+    Ok(())
+}
+struct TrackErrorNotifier;
+
+#[async_trait]
+impl VoiceEventHandler for TrackErrorNotifier {
+    async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
+        if let EventContext::Track(track_list) = ctx {
+            for (state, handle) in *track_list {
+                println!(
+                    "Track {:?} encountered an error: {:?}",
+                    handle.uuid(),
+                    state.playing
+                );
+            }
+        }
+
+        None
+    }
+}
+
+#[command]
+#[only_in(guilds)]
+async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
+    let guild_id = msg.guild_id.unwrap();
+
+    let manager = songbird::get(ctx)
+        .await
+        .expect("Songbird Voice client placed in at initialisation.")
+        .clone();
+    let has_handler = manager.get(guild_id).is_some();
+
+    if has_handler {
+        if let Err(e) = manager.remove(guild_id).await {
+            msg.channel_id
+                .say(&ctx.http, format!("Failed: {:?}", e))
+                .await;
+        }
+
+        msg.channel_id.say(&ctx.http, "Left voice channel").await;
+    } else {
+        msg.reply(ctx, "Not in a voice channel").await;
+    }
+
+    Ok(())
+}
+
+#[command]
+async fn about(ctx: &Context, msg: &Message) -> CommandResult {
+    msg.reply(ctx, format!(r#"HELLO SIR! I AM A HALE AND HEARTY SIR, YOU CAN FIND MY CODE AT HTTPS://GITHUB.COM/FRIZBOX2000
+ I say funny little gnome things, you can use... 
+ `~say` to make me say something (a good tip is to use short messages ~250 characters with lots of !'s and ?'s)"#, )).await?;
     Ok(())
 }
 
 #[command]
 async fn say(ctx: &Context, msg: &Message) -> CommandResult {
     let content = msg.content.clone();
+    let guild_id = msg.guild_id.unwrap();
     tokio::task::spawn_blocking(move || {
         let text = fix_input(&content[5..]);
         get_voice_and_save(&text);
     })
     .await
     .expect("Task Panicked");
-    msg.reply(ctx, "I Have just created the file;").await?;
+    // ok now let's get the songbird thingy and play some audio!!!
+    let mut f = File::open("audio/temp.mpeg").unwrap();
+    let mut input = vec![];
+    f.read_to_end(&mut input);
+    if let Some(handler_lock) = songbird::get(ctx)
+        .await
+        .expect("Songbird Voice client not found")
+        .clone()
+        .get(guild_id)
+    {
+        let mut handler = handler_lock.lock().await;
+        let _ = handler.play_input(input.into());
+    }
+    Ok(())
+}
+
+#[command]
+async fn sayq(ctx: &Context, msg: &Message) -> CommandResult {
+    let content = msg.content.clone();
+    tokio::task::spawn_blocking(move || get_voice_and_save(&content[5..]))
+        .await
+        .expect("Task Panicked");
     Ok(())
 }
 
