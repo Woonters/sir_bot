@@ -1,11 +1,14 @@
 use reqwest::get;
 use serenity::{
-    all::Ready,
+    all::{Ready, UserId},
     async_trait,
     client::Context,
     framework::standard::{
-        macros::{command, group},
-        CommandResult, Configuration, StandardFramework,
+        buckets::{LimitedFor, RevertBucket},
+        help_commands,
+        macros::{command, group, help, hook},
+        Args, BucketBuilder, CommandGroup, CommandResult, Configuration, HelpOptions,
+        StandardFramework,
     },
     model::channel::Message,
     prelude::*,
@@ -15,6 +18,7 @@ use songbird::{
     SerenityInit,
 };
 use std::{
+    collections::HashSet,
     env,
     fs::File,
     io::{stdin, Read, Write},
@@ -22,8 +26,25 @@ use std::{
 use urlencoding::encode;
 
 #[group]
-#[commands(about, say, sayq, join, leave)]
+#[description = "All of the main commands of the bot, join and leave channels and say stuff"]
+#[summary = "Generic commands"]
+#[commands(about)]
 struct General;
+
+#[group]
+#[prefixes("voice", "v")]
+#[description = "A group of vc commands"]
+#[summary = "Commands for joining and leaving vc"]
+#[commands(join, leave)]
+struct Voice;
+
+#[group]
+#[prefixes("say")]
+#[description = "A group of commands for making Sir speak (he should be in vc)"]
+#[summary = "Commands for speaking"]
+#[default_command(say)]
+#[commands(say, sayq)]
+struct Say;
 
 struct Handler;
 
@@ -34,9 +55,35 @@ impl EventHandler for Handler {
     }
 }
 
+#[help]
+#[individual_command_tip = "Hello this is a command tip, please put a command after this to learn about it"]
+#[command_not_found_text = "That isn't a command I can do, sorry"]
+#[max_levenshtein_distance(3)]
+#[indention_prefix = "+"]
+#[lacking_permissions = "Hide"]
+#[lacking_role = "Nothing"]
+#[wrong_channel = "Strike"]
+async fn my_help(
+    context: &Context,
+    msg: &Message,
+    args: Args,
+    help_options: &'static HelpOptions,
+    groups: &[&'static CommandGroup],
+    owners: HashSet<UserId>,
+) -> CommandResult {
+    let _ = help_commands::with_embeds(context, msg, args, help_options, groups, owners).await;
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() {
-    let framework = StandardFramework::new().group(&GENERAL_GROUP);
+    let framework = StandardFramework::new()
+        .bucket("General", BucketBuilder::default().delay(1))
+        .await
+        .help(&MY_HELP)
+        .group(&GENERAL_GROUP)
+        .group(&VOICE_GROUP)
+        .group(&SAY_GROUP);
     framework.configure(Configuration::new().prefix("~"));
     // that's our prefix, we look for messages with that
 
@@ -71,7 +118,7 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
     let connect_to = match channel_id {
         Some(channel) => channel,
         None => {
-            (msg.reply(ctx, "Not in a voice channel").await);
+            (msg.reply(ctx, "Not in a voice channel").await.unwrap());
 
             return Ok(());
         }
@@ -90,6 +137,17 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
 
     Ok(())
 }
+
+#[hook]
+async fn delay_action(ctx: &Context, msg: &Message) {
+    let _ = msg.react(ctx, '⏱').await;
+}
+
+#[hook]
+async fn unknown_command(ctx: &Context, _msg: &Message, unknown_command_name: &str) {
+    println!("Could not find command named {unknown_command_name}");
+}
+
 struct TrackErrorNotifier;
 
 #[async_trait]
@@ -137,9 +195,9 @@ async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
 
 #[command]
 async fn about(ctx: &Context, msg: &Message) -> CommandResult {
-    msg.reply(ctx, format!(r#"HELLO SIR! I AM A HALE AND HEARTY SIR, YOU CAN FIND MY CODE AT HTTPS://GITHUB.COM/FRIZBOX2000
+    msg.reply(ctx, r#"HELLO SIR! I AM A HALE AND HEARTY SIR, YOU CAN FIND MY CODE AT HTTPS://GITHUB.COM/FRIZBOX2000
  I say funny little gnome things, you can use... 
- `~say` to make me say something (a good tip is to use short messages ~250 characters with lots of !'s and ?'s)"#, )).await?;
+ `~say` to make me say something (a good tip is to use short messages ~250 characters with lots of !'s and ?'s)"#.to_string()).await?;
     Ok(())
 }
 
@@ -170,7 +228,7 @@ async fn say(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
-async fn sayq(ctx: &Context, msg: &Message) -> CommandResult {
+async fn sayq(_ctx: &Context, msg: &Message) -> CommandResult {
     let content = msg.content.clone();
     tokio::task::spawn_blocking(move || get_voice_and_save(&content[5..]))
         .await
@@ -216,7 +274,7 @@ fn fix_input(input: &str) -> String {
 mod tests {
     // Tests are atm not working, I don't think that's the worst thing in the world atm, but I
     // would like to get it working eventually
-    use crate::{fix_input, get_input, get_voice_and_save};
+    use super::*;
 
     #[test]
     fn test_voice_api() {
