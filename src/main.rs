@@ -1,6 +1,8 @@
+use rand::seq::SliceRandom;
 use reqwest::get;
+use serde::Deserialize;
 use serenity::{
-    all::{Ready, UserId},
+    all::{ChannelId, GuildId, Ready, UserId, VoiceState},
     async_trait,
     client::Context,
     framework::standard::{
@@ -18,11 +20,12 @@ use songbird::{
     SerenityInit,
 };
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     env,
-    fs::File,
+    fs::{self, File},
     io::{stdin, Read, Write},
 };
+use toml::{self, from_str, value::Array, Value};
 use urlencoding::encode;
 
 #[group]
@@ -48,10 +51,121 @@ struct Say;
 
 struct Handler;
 
+struct ChannelIdChecker;
+impl TypeMapKey for ChannelIdChecker {
+    type Value = u64;
+}
+
+struct RecordedMessagesDataBase;
+impl TypeMapKey for RecordedMessagesDataBase {
+    type Value = HashMap<String, AccountMessages>;
+}
+
+async fn set_channel_id(ctx: &Context, channel_id: u64) {
+    let mut data = ctx.data.write().await;
+
+    let c_id = data.get_mut::<ChannelIdChecker>().unwrap();
+    *c_id = channel_id;
+}
+
+async fn get_channel_id(ctx: &Context) -> u64 {
+    let data = ctx.data.read().await;
+    return *data.get::<ChannelIdChecker>().unwrap();
+}
+
+async fn set_recorded_messages(ctx: &Context) {
+    let mut data = ctx.data.write().await;
+    let f = fs::read_to_string("./prerecordedtable.toml").expect("No prerecorded info, please add");
+    let table: HashMap<String, Vec<AccountMessagesExt>> = from_str(&f).unwrap();
+    let accounts: &[AccountMessagesExt] = &table["User"];
+    let mut new_accounts: HashMap<String, AccountMessages> = HashMap::new();
+    accounts.iter().for_each(|value| {
+        new_accounts.insert(
+            value.id.to_string(),
+            AccountMessages {
+                name: value.name.clone(),
+                join: value.join.clone(),
+                leave: value.leave.clone(),
+            },
+        );
+    });
+    let to_change = data.get_mut::<RecordedMessagesDataBase>().unwrap();
+    *to_change = new_accounts;
+}
+
+#[derive(Deserialize, Debug)]
+struct AccountMessagesExt {
+    id: String,
+    name: String,
+    join: Vec<String>,
+    leave: Vec<String>,
+}
+
+struct AccountMessages {
+    name: String,
+    join: Vec<String>,
+    leave: Vec<String>,
+}
+
 #[async_trait]
 impl EventHandler for Handler {
-    async fn ready(&self, _: Context, ready: Ready) {
+    async fn ready(&self, ctx: Context, ready: Ready) {
         println!("{} is connected", ready.user.name);
+        set_recorded_messages(&ctx).await;
+    }
+    async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
+        let c_id = get_channel_id(&ctx).await;
+        let new_id = new.member.as_ref().unwrap().user.id.get();
+        let guild_id = new.guild_id.unwrap();
+        match old {
+            Some(old) => {
+                //check if it is someone leaving
+                if old.channel_id.unwrap().get() == c_id
+                    && new.channel_id.is_none()
+                    && new.member.unwrap().user.id.get() != 1187133570653896806
+                {
+                    // they have just left the channel I was in and is not me
+                    let data = ctx.data.read().await;
+                    let accounts = data.get::<RecordedMessagesDataBase>().unwrap();
+                    let personal = accounts.get(&new_id.to_string());
+                    let general = accounts.get("0").unwrap();
+                    let file_path_array = &match personal {
+                        Some(v) => match rand::random::<bool>() {
+                            true => &v.leave,
+                            false => &general.leave,
+                        },
+                        None => &general.leave,
+                    };
+                    let file_path = file_path_array.choose(&mut rand::thread_rng());
+                    println!("{:?}", file_path);
+                    let _ = say_saved(&ctx, guild_id, file_path.unwrap()).await;
+                }
+            }
+            None => {
+                // We know this is the person joining a VC!
+                // TODO: Make it so the bot id is updated for better future support
+                if c_id == new.channel_id.unwrap().get()
+                    && new.member.unwrap().user.id.get() != 1187133570653896806
+                {
+                    // that last half makes sure that it isn't me!
+                    println!("They have joined the channel I AM IN!!!");
+                    let data = ctx.data.read().await;
+                    let accounts = data.get::<RecordedMessagesDataBase>().unwrap();
+                    let personal = accounts.get(&new_id.to_string());
+                    let general = accounts.get("0").unwrap();
+                    let file_path_array = &match personal {
+                        Some(v) => match rand::random::<bool>() {
+                            true => &v.join,
+                            false => &general.join,
+                        },
+                        None => &general.join,
+                    };
+                    let file_path = file_path_array.choose(&mut rand::thread_rng());
+                    println!("{:?}", file_path);
+                    let _ = say_saved(&ctx, guild_id, file_path.unwrap()).await;
+                }
+            }
+        }
     }
 }
 
@@ -95,6 +209,11 @@ async fn main() {
         .register_songbird()
         .await
         .expect("Failed creating discord client");
+    {
+        let mut data = client.data.write().await;
+        data.insert::<ChannelIdChecker>(0);
+        data.insert::<RecordedMessagesDataBase>(HashMap::new());
+    }
     if let Err(why) = client.start().await {
         println!(
             "An Error {} has occurred whilst starting discord client",
@@ -111,10 +230,9 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
             .voice_states
             .get(&msg.author.id)
             .and_then(|voice_state| voice_state.channel_id);
-
         (guild.id, channel_id)
     };
-
+    set_channel_id(ctx, channel_id.unwrap().get()).await;
     let connect_to = match channel_id {
         Some(channel) => channel,
         None => {
@@ -186,6 +304,8 @@ async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
         }
 
         msg.channel_id.say(&ctx.http, "Left voice channel").await;
+
+        set_channel_id(ctx, 0).await;
     } else {
         msg.reply(ctx, "Not in a voice channel").await;
     }
@@ -218,6 +338,22 @@ async fn say(ctx: &Context, msg: &Message) -> CommandResult {
     if let Some(handler_lock) = songbird::get(ctx)
         .await
         .expect("Songbird Voice client not found")
+        .clone()
+        .get(guild_id)
+    {
+        let mut handler = handler_lock.lock().await;
+        let _ = handler.play_input(input.into());
+    }
+    Ok(())
+}
+
+async fn say_saved(ctx: &Context, guild_id: GuildId, file_path: &String) -> CommandResult {
+    let mut f = File::open(format!("audio/{file_path}.mpeg")).unwrap();
+    let mut input = vec![];
+    f.read_to_end(&mut input);
+    if let Some(handler_lock) = songbird::get(ctx)
+        .await
+        .expect("Songbird Client not working")
         .clone()
         .get(guild_id)
     {

@@ -21,3 +21,5 @@ need to design stuff but that's a problem for later Jemma
 
 Looking at using serenty for the discord side, this will probably take a bit of
 working
+
+https://docs.rs/serenity/0.12.0/serenity/client/struct.Context.html
