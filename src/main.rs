@@ -51,16 +51,42 @@ struct Say;
 
 struct Handler;
 
+// Structs for reading the toml of join and leave messages
+#[derive(Deserialize, Debug)]
+struct JoinLeaveMessageExt {
+    id: String,
+    #[serde(flatten)]
+    inner: JoinLeaveMessages,
+}
+
+// Struct for internal use of join leave messages, the ID is the key allowing for quick searching
+#[derive(Deserialize, Debug)]
+struct JoinLeaveMessages {
+    name: String,
+    join: Vec<String>,
+    leave: Vec<String>,
+}
+
+// To know the current ChannelID that the bot is in
+// TODO: This does mean the bot only knows 1 channel it is in (noteably the last one it joined) meaning if it is in two channels it will only log people entering / leaving in it's most recent one. I should upgrade this to work
+//       with the bot in more than 1 channel though that might take a bit of thinking
 struct ChannelIdChecker;
 impl TypeMapKey for ChannelIdChecker {
     type Value = u64;
 }
 
-struct RecordedMessagesDataBase;
-impl TypeMapKey for RecordedMessagesDataBase {
-    type Value = HashMap<String, AccountMessages>;
+struct BotIDChecker;
+impl TypeMapKey for BotIDChecker {
+    type Value = UserId;
 }
 
+// Moving the database of join leave messages across threads for the handler
+struct JoinLeaveMessageDatabase;
+impl TypeMapKey for JoinLeaveMessageDatabase {
+    type Value = HashMap<String, JoinLeaveMessages>;
+}
+
+// Functions around the channel ID for reading and writing
 async fn set_channel_id(ctx: &Context, channel_id: u64) {
     let mut data = ctx.data.write().await;
 
@@ -73,38 +99,38 @@ async fn get_channel_id(ctx: &Context) -> u64 {
     return *data.get::<ChannelIdChecker>().unwrap();
 }
 
+async fn set_bot_id(ctx: &Context, user_id: UserId) {
+    let mut data = ctx.data.write().await;
+    let u_id = data.get_mut::<BotIDChecker>().unwrap();
+    *u_id = user_id;
+}
+
+async fn get_bot_id(ctx: &Context) -> UserId {
+    let data = ctx.data.read().await;
+    return *data.get::<BotIDChecker>().unwrap();
+}
+
+// TODO: Clean up this function
+// TODO: A bot command should also run this so I can update join leave messages
+// set up the recorded messages into the database
 async fn set_recorded_messages(ctx: &Context) {
     let mut data = ctx.data.write().await;
     let f = fs::read_to_string("./prerecordedtable.toml").expect("No prerecorded info, please add");
-    let table: HashMap<String, Vec<AccountMessagesExt>> = from_str(&f).unwrap();
-    let accounts: &[AccountMessagesExt] = &table["User"];
-    let mut new_accounts: HashMap<String, AccountMessages> = HashMap::new();
+    let table: HashMap<String, Vec<JoinLeaveMessageExt>> = from_str(&f).unwrap();
+    let accounts: &[JoinLeaveMessageExt] = &table["User"];
+    let mut new_accounts: HashMap<String, JoinLeaveMessages> = HashMap::new();
     accounts.iter().for_each(|value| {
         new_accounts.insert(
             value.id.to_string(),
-            AccountMessages {
-                name: value.name.clone(),
-                join: value.join.clone(),
-                leave: value.leave.clone(),
+            JoinLeaveMessages {
+                name: value.inner.name.clone(),
+                join: value.inner.join.clone(),
+                leave: value.inner.leave.clone(),
             },
         );
     });
-    let to_change = data.get_mut::<RecordedMessagesDataBase>().unwrap();
+    let to_change = data.get_mut::<JoinLeaveMessageDatabase>().unwrap();
     *to_change = new_accounts;
-}
-
-#[derive(Deserialize, Debug)]
-struct AccountMessagesExt {
-    id: String,
-    name: String,
-    join: Vec<String>,
-    leave: Vec<String>,
-}
-
-struct AccountMessages {
-    name: String,
-    join: Vec<String>,
-    leave: Vec<String>,
 }
 
 #[async_trait]
@@ -113,57 +139,48 @@ impl EventHandler for Handler {
         println!("{} is connected", ready.user.name);
         set_recorded_messages(&ctx).await;
     }
+
+    // Any time a discord channel gets an update I handel it with this
+    // TODO: Move stuff into match arms and flatten a lot of this
     async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
-        let c_id = get_channel_id(&ctx).await;
         let new_id = new.member.as_ref().unwrap().user.id.get();
+        let bot_id = get_bot_id(&ctx).await;
+        if new_id == bot_id.get() {
+            return;
+        }
+        let c_id = get_channel_id(&ctx).await;
         let guild_id = new.guild_id.unwrap();
+        let data = ctx.data.read().await;
+        let join_leave_message_database = data.get::<JoinLeaveMessageDatabase>().unwrap();
+        let personal_messages = join_leave_message_database.get(&new_id.to_string());
+        let general_messages = join_leave_message_database.get("0").unwrap();
         match old {
-            Some(old) => {
-                //check if it is someone leaving
-                if old.channel_id.unwrap().get() == c_id
-                    && new.channel_id.is_none()
-                    && new.member.unwrap().user.id.get() != 1187133570653896806
-                {
-                    // they have just left the channel I was in and is not me
-                    let data = ctx.data.read().await;
-                    let accounts = data.get::<RecordedMessagesDataBase>().unwrap();
-                    let personal = accounts.get(&new_id.to_string());
-                    let general = accounts.get("0").unwrap();
-                    let file_path_array = &match personal {
-                        Some(v) => match rand::random::<bool>() {
-                            true => &v.leave,
-                            false => &general.leave,
-                        },
-                        None => &general.leave,
-                    };
-                    let file_path = file_path_array.choose(&mut rand::thread_rng());
-                    println!("{:?}", file_path);
-                    let _ = say_saved(&ctx, guild_id, file_path.unwrap()).await;
-                }
+            Some(old) if old.channel_id.unwrap().get() == c_id && new.channel_id.is_none() => {
+                // the have left channel
+                let file_path_array = &match personal_messages {
+                    Some(v) => match rand::random::<bool>() {
+                        true => &v.leave,
+                        false => &general_messages.leave,
+                    },
+                    None => &general_messages.leave,
+                };
+                let file_path = file_path_array.choose(&mut rand::thread_rng());
+                let _ = say_saved(&ctx, guild_id, file_path.unwrap()).await;
             }
-            None => {
-                // We know this is the person joining a VC!
-                // TODO: Make it so the bot id is updated for better future support
-                if c_id == new.channel_id.unwrap().get()
-                    && new.member.unwrap().user.id.get() != 1187133570653896806
-                {
-                    // that last half makes sure that it isn't me!
-                    println!("They have joined the channel I AM IN!!!");
-                    let data = ctx.data.read().await;
-                    let accounts = data.get::<RecordedMessagesDataBase>().unwrap();
-                    let personal = accounts.get(&new_id.to_string());
-                    let general = accounts.get("0").unwrap();
-                    let file_path_array = &match personal {
-                        Some(v) => match rand::random::<bool>() {
-                            true => &v.join,
-                            false => &general.join,
-                        },
-                        None => &general.join,
-                    };
-                    let file_path = file_path_array.choose(&mut rand::thread_rng());
-                    println!("{:?}", file_path);
-                    let _ = say_saved(&ctx, guild_id, file_path.unwrap()).await;
-                }
+            None if c_id == new.channel_id.unwrap().get() => {
+                // account has joined a channel
+                let file_path_array = &match personal_messages {
+                    Some(v) => match rand::random::<bool>() {
+                        true => &v.join,
+                        false => &general_messages.join,
+                    },
+                    None => &general_messages.join,
+                };
+                let file_path = file_path_array.choose(&mut rand::thread_rng());
+                let _ = say_saved(&ctx, guild_id, file_path.unwrap()).await;
+            }
+            _ => {
+                return;
             }
         }
     }
@@ -212,7 +229,7 @@ async fn main() {
     {
         let mut data = client.data.write().await;
         data.insert::<ChannelIdChecker>(0);
-        data.insert::<RecordedMessagesDataBase>(HashMap::new());
+        data.insert::<JoinLeaveMessageDatabase>(HashMap::new());
     }
     if let Err(why) = client.start().await {
         println!(

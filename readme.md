@@ -10,16 +10,12 @@ limited.
 
 ## TODO / Dev work
 
-At the moment the bot only will use "aHaleAndHeartySir" voice, but it might be
-nice for users to be able to use other voices, although I think I will default to
-sir
-
-I could rate limit on my end, due to it only being on one server it might be a single
-thread kind of problem, this would make things easier, and lower the likelyhood of
-worriyng about ratelimits but good practice on writing a multithreaded thing, I will
-need to design stuff but that's a problem for later Jemma
-
-Looking at using serenty for the discord side, this will probably take a bit of
-working
-
 https://docs.rs/serenity/0.12.0/serenity/client/struct.Context.html
+
+TODOs:
+An internal voice to fall back on since I can run out of generations / more voices 
+Editiable join and leave messages 
+Turn any println!'s into logging messages 
+Move a lot of bot commands to use discords inbuilt command structure 
+Stop saving messages to TEMP.mpeg, and have a fall back message / use that internal voice 
+

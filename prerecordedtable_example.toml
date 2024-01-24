@@ -1,0 +1,17 @@
+# this is an exmaple table for prerecorded messages, to use this remove the "_example" in the name of 
+# this file. 
+
+[[User]]# the id of 0 is used for if someone doesn't have a recognised user id, it is a default user
+id = "0" 
+name = "Default" # this is just so it is easier to read, to remeber what id's link to what users
+join = ["audio/name_of_audio_file","audio/name_of_another_audio_file"] # list of joining audio messages
+leave = ["audio/same_as_above_but_for_leaving_messages", "audio/this_is_also_a_list"] # same as above but for leaving
+
+[[User]] # Each entry starts with this 
+id = "1234567890" # to get this make sure you have developer mode on in discord and right click on a user 
+# to get their user id 
+name = "Username"
+join = []
+leave = []
+
+
