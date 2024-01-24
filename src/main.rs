@@ -138,10 +138,12 @@ impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
         println!("{} is connected", ready.user.name);
         set_recorded_messages(&ctx).await;
+        set_bot_id(&ctx, ready.user.id).await;
     }
 
     // Any time a discord channel gets an update I handel it with this
     // TODO: Move stuff into match arms and flatten a lot of this
+    // TODO: Handel empty lists
     async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
         let new_id = new.member.as_ref().unwrap().user.id.get();
         let bot_id = get_bot_id(&ctx).await;
