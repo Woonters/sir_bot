@@ -18,4 +18,7 @@ Editiable join and leave messages
 Turn any println!'s into logging messages 
 Move a lot of bot commands to use discords inbuilt command structure 
 Stop saving messages to TEMP.mpeg, and have a fall back message / use that internal voice 
-
+Error messages on say_saved
+Play youtube videos
+Pause , Stop etc. controls
+Play music from my library maybe?
