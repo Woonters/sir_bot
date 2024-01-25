@@ -1,20 +1,13 @@
 use poise::serenity_prelude as serenity;
-use poise::Command;
+
 use rand::seq::SliceRandom;
 use reqwest::get;
 use serde::Deserialize;
 use serenity::{
-    all::{ChannelId, GuildId, Ready, UserId, VoiceState},
+    all::{ChannelId, GuildId, UserId},
     async_trait,
     client::Context,
-    framework::standard::{
-        buckets::{LimitedFor, RevertBucket},
-        help_commands,
-        macros::{command, group, help, hook},
-        Args, BucketBuilder, CommandGroup, CommandResult, Configuration, HelpOptions,
-        StandardFramework,
-    },
-    model::channel::Message,
+    framework::standard::CommandResult,
     prelude::*,
 };
 use songbird::{
@@ -25,12 +18,12 @@ use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     env,
     fs::{self, File},
-    io::{stdin, Read, Write},
+    io::{Read, Write},
 };
-use toml::{self, from_str, value::Array, Value};
+use toml::{self, from_str};
 use urlencoding::encode;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -229,12 +222,7 @@ async fn main() {
         .setup(move |ctx, _ready, framework| {
             Box::pin(async move {
                 println!("Logged in as {}", _ready.user.name);
-                poise::builtins::register_in_guild(
-                    ctx,
-                    &framework.options().commands,
-                    GuildId::new(667311502650376192),
-                )
-                .await?;
+                poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 Ok(Data {
                     channel_id: Mutex::new(ChannelId::new(1)),
                     bot_id: Mutex::new(UserId::new(1)),
