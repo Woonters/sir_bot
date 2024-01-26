@@ -1,5 +1,5 @@
 use crate::{Error, PoiseContext, TrackEvent};
-use poise::serenity_prelude as serenity;
+
 use songbird::{events::EventHandler as VoiceEventHandler, Event, EventContext};
 /// Join the Users current Voice chat
 #[poise::command(slash_command, prefix_command)]

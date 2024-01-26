@@ -1,5 +1,5 @@
 use crate::{Error, PoiseContext};
-use poise::serenity_prelude as serenity;
+
 
 /// A simple example command just describes what the bot can do and who the cheeky little gnome is :)
 #[poise::command(prefix_command, slash_command)]

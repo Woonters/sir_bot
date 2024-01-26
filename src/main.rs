@@ -1,34 +1,30 @@
 mod commands;
 mod event_handler;
 
-use commands::about::help;
+
 use poise::serenity_prelude as serenity;
 
-use reqwest::get;
+
 use serde::Deserialize;
 use serenity::{
-    all::{ChannelId, GuildId, UserId},
-    async_trait,
-    client::Context,
-    framework::standard::CommandResult,
+    all::{ChannelId, UserId},
     prelude::*,
 };
 use songbird::{
-    events::{Event, EventContext, EventHandler as VoiceEventHandler, TrackEvent},
+    events::{TrackEvent},
     SerenityInit,
 };
-use std::num::NonZeroU64;
+
 use std::sync::Arc;
 use std::time::Duration;
 use std::{
     collections::HashMap,
     env,
-    fs::{self, File},
-    io::{Read, Write},
+    fs::{self},
 };
 
 use toml::{self, from_str};
-use urlencoding::encode;
+
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type PoiseContext<'a> = poise::Context<'a, Data, Error>;
