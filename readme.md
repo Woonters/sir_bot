@@ -1,9 +1,9 @@
 # SirBot
 
-![The Cheeky sir in question](images/gnome.jpg)
+![The Cheeky sir in question](images/gnome_thumbnail.jpg)
 
-
-[![Build](https://github.com/Fritzbox2000/sir_bot/actions/workflows/rust/badge.svg)]
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/Fritzbox2000/sir_bot/rust.yml)
+![X (formerly Twitter) URL](https://img.shields.io/twitter/url?url=https%3A%2F%2Ftwitter.com%2Fwoonters)
 
 ## Overview
 
