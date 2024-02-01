@@ -16,25 +16,18 @@ pub async fn say(
     #[description = "Use another voice, any string will work"] voice: Option<String>,
 ) -> Result<(), Error> {
     match voice {
-        Some(v) => _say(ctx, msg, v).await,
-        None => _say(ctx, msg, "aHaleAndHeartySir".to_string()).await,
+        Some(v) => _say(ctx, msg, v, false).await,
+        None => _say(ctx, msg, "aHaleAndHeartySir".to_string(), false).await,
     }
 }
 
-async fn _say(ctx: PoiseContext<'_>, msg: String, voice: String) -> Result<(), Error> {
+async fn _say(ctx: PoiseContext<'_>, msg: String, voice: String, save: bool) -> Result<(), Error> {
     let content = msg.clone();
     let guild_id = ctx.guild_id();
     let seed = voice.clone();
-    tokio::task::spawn_blocking(move || {
-        let text = fix_input(&content);
-        get_voice_and_save(&text, &seed);
-    })
-    .await
-    .expect("Task Panicked");
+    let text = fix_input(&content);
+    let input = get_voice_and_save(&text, &seed, save).await.unwrap();
     // ok now let's get the songbird thingy and play some audio!!!
-    let mut f = File::open("audio/temp.mpeg").unwrap();
-    let mut input = vec![];
-    let _ = Read::read_to_end(&mut f, &mut input);
     if let Some(handler_lock) = songbird::get(ctx.serenity_context())
         .await
         .expect("Songbird Voice client not found")
@@ -66,8 +59,11 @@ pub async fn say_saved(ctx: &Context, guild_id: GuildId, file_path: &String) -> 
     Ok(())
 }
 
-#[tokio::main]
-async fn get_voice_and_save(input: &str, voice: &str) {
+async fn get_voice_and_save(
+    input: &str,
+    voice: &str,
+    save: bool,
+) -> Result<bytes::Bytes, std::io::Error> {
     let response = get(format!(
         "https://api.novelai.net/ai/generate-voice?text={}&seed={}&voice=-1&opus=false&version=v2",
         input, voice
@@ -79,15 +75,22 @@ async fn get_voice_and_save(input: &str, voice: &str) {
                     .bytes()
                     .await
                     .expect("SOMETHING VERY WRONG HAS HAPPENED SIR");
-                let mut file = File::create("audio/temp.mpeg").expect("File creation failed");
-                file.write_all(&bytes).unwrap();
-                println!("Message received, file saved, all success")
+                if save {
+                    let mut file = File::create("audio/temp.mpeg").expect("File creation failed");
+                    file.write_all(&bytes).unwrap();
+                    println!("Message received, file saved, all success")
+                }
+                return Ok(bytes);
             } else {
                 println!("Bad Response: {}", resp.status());
             }
         }
         Err(e) => println!("Request failed {}", e),
     }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        "Couldn't generate voice",
+    ))
 }
 
 fn fix_input(input: &str) -> String {

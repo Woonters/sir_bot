@@ -16,7 +16,7 @@ pub async fn leave(ctx: PoiseContext<'_>) -> Result<(), Error> {
             let _ = ctx.channel_id().say(ctx, format!("Failed: {:?}", e)).await;
         }
 
-        let _ = ctx.channel_id().say(ctx, "Left voice channel").await;
+        let _ = ctx.reply("Bye bye :wave:").await;
         let mut c_id = ctx.data().channel_id.lock().await;
         *c_id = ChannelId::new(1)
     } else {

@@ -18,9 +18,6 @@ pub async fn event_handler(
             *write_bot_id = data_about_bot.user.id;
         }
 
-        // Little note I seem to be getting a message:
-        //Track b180e8b2-b52d-45ca-b044-34554bd854bd encountered an error: Errored(Parse(IoError(Custom { kind: UnexpectedEof, error: "end of stream" })))
-        // which might mean that `say_saved` is broken in some way, it should be a carbon copy of say, but idk
         serenity::FullEvent::VoiceStateUpdate { old, new } => {
             println!("Voice Event Update has triggered ");
             let new_id = new.member.as_ref().unwrap().user.id.get();
@@ -48,7 +45,9 @@ pub async fn event_handler(
                         };
                         let file_path = file_path_array.choose(&mut rand::thread_rng());
                         println!("I should say that they have left!");
-                        let _ = say_saved(ctx, guild_id, file_path.unwrap()).await;
+                        if let Some(fp) = file_path {
+                            let _ = say_saved(ctx, guild_id, fp).await;
+                        }
                     }
                     None if c_id == new.channel_id.unwrap().get() => {
                         // account has joined a channel
@@ -61,7 +60,9 @@ pub async fn event_handler(
                         };
                         let file_path = file_path_array.choose(&mut rand::thread_rng());
                         println!("I should say they have joined");
-                        let _ = say_saved(ctx, guild_id, file_path.unwrap()).await;
+                        if let Some(fp) = file_path {
+                            let _ = say_saved(ctx, guild_id, fp).await;
+                        }
                     }
                     _ => {}
                 }

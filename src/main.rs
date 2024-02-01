@@ -1,19 +1,14 @@
 mod commands;
 mod event_handler;
 
-
 use poise::serenity_prelude as serenity;
-
 
 use serde::Deserialize;
 use serenity::{
     all::{ChannelId, UserId},
     prelude::*,
 };
-use songbird::{
-    events::{TrackEvent},
-    SerenityInit,
-};
+use songbird::{events::TrackEvent, SerenityInit};
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -24,7 +19,6 @@ use std::{
 };
 
 use toml::{self, from_str};
-
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type PoiseContext<'a> = poise::Context<'a, Data, Error>;
@@ -102,6 +96,7 @@ async fn main() {
             commands::say::say(),
             commands::leave::leave(),
             commands::about::help(),
+            commands::reload_messages::reload_join_leave_messages(),
         ],
         prefix_options: poise::PrefixFrameworkOptions {
             prefix: Some("~".into()),
