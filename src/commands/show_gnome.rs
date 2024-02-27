@@ -29,6 +29,11 @@ pub fn get_gnome_photo() -> CreateAttachment {
             .to_str()
             .unwrap(),
     )
-    .unwrap();
+    .unwrap(); // this is somehow genuinely the way to do this, or atleast one way
+               // how many unwraps does one function need!
+               // I'm going to just hope it works every time and not write my own logging stuff or
+               // deal with Errs for this function as I really don't think anyone should need to. Effectively
+               // only way I can see this going is if some file can't be read, or a file is edited whilst this
+               // function is executing. The former is much more likely but still unlikely
     CreateAttachment::bytes(gnome_pic, "GNOME.jpg")
 }

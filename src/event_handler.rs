@@ -4,6 +4,7 @@ use rand::seq::SliceRandom;
 use serenity::prelude::Context;
 
 use crate::{commands::say::say_saved, set_recorded_messages, Data, Error};
+use log::{debug, error, info, log_enabled, Level};
 
 pub async fn event_handler(
     ctx: &Context,
@@ -16,18 +17,19 @@ pub async fn event_handler(
             set_recorded_messages(data).await;
             let mut write_bot_id = data.bot_id.lock().await;
             *write_bot_id = data_about_bot.user.id;
+            info!("Bot has started and Bot's ID has been saved");
         }
 
         serenity::FullEvent::VoiceStateUpdate { old, new } => {
-            println!("Voice Event Update has triggered ");
-            let new_id = new.member.as_ref().unwrap().user.id.get();
+            info!("Voice Event Update has triggered ");
+            let new_id = new.member.as_ref().unwrap().user.id.get(); // new should always have a memeber as it's argument
             let (bot_id, c_id) = {
                 let bot_id_getter = data.bot_id.lock().await;
                 let channel_id_getter = data.channel_id.lock().await;
                 (bot_id_getter.get(), channel_id_getter.get())
             };
             if new_id != bot_id {
-                let guild_id = new.guild_id.unwrap();
+                let guild_id = new.guild_id.expect(""); // this should always return Some
                 let join_leave_message_database = data.join_leave_message_database.lock().await;
                 let personal_messages = join_leave_message_database.get(&new_id.to_string());
                 let general_messages = join_leave_message_database.get("0").unwrap();

@@ -16,18 +16,30 @@ pub async fn say(
     #[description = "Use another voice, any string will work"] voice: Option<String>,
 ) -> Result<(), Error> {
     match voice {
-        Some(v) => _say(ctx, msg, v, false).await,
-        None => _say(ctx, msg, "aHaleAndHeartySir".to_string(), false).await,
+        // This means the bot will default to "aHaleandHeartySir" (blue gnome voice)
+        Some(v) => _say(ctx, msg, v, None).await,
+        None => _say(ctx, msg, "aHaleAndHeartySir".to_string(), None).await,
     }
 }
 
-async fn _say(ctx: PoiseContext<'_>, msg: String, voice: String, save: bool) -> Result<(), Error> {
+async fn _say(
+    ctx: PoiseContext<'_>,
+    msg: String,
+    voice: String,
+    save: Option<&str>,
+) -> Result<(), Error> {
     let content = msg.clone();
     let guild_id = ctx.guild_id();
     let seed = voice.clone();
     let text = fix_input(&content);
-    let input = get_voice_and_save(&text, &seed, save).await.unwrap();
-    // ok now let's get the songbird thingy and play some audio!!!
+    let _input = get_voice(&text, &seed, save).await;
+    let input: bytes::Bytes = match _input {
+        Ok(i) => i,
+        Err(e) => {
+            log::error!("{:?}", e);
+            return Err(Box::new(e));
+        }
+    };
     if let Some(handler_lock) = songbird::get(ctx.serenity_context())
         .await
         .expect("Songbird Voice client not found")
@@ -39,12 +51,18 @@ async fn _say(ctx: PoiseContext<'_>, msg: String, voice: String, save: bool) -> 
         let mut handler = handler_lock.lock().await;
         let _ = handler.play_input(input.into());
     }
-    let _ = ctx.reply(":)").await;
+    let _ = ctx.reply(":)").await; // TODO: Better text response, maybe just say some gnome stuff
     Ok(())
 }
 
 pub async fn say_saved(ctx: &Context, guild_id: GuildId, file_path: &String) -> CommandResult {
-    let mut f = File::open(format!("audio/{file_path}.mpeg")).unwrap();
+    let mut f = match File::open(format!("audio/{file_path}.mpeg")) {
+        Ok(data) => data,
+        Err(e) => {
+            log::error!("Failed to open file {:?} | {:?}", file_path, e);
+            return Err(Box::new(e));
+        }
+    };
     let mut input = vec![];
     let _ = f.read_to_end(&mut input);
     if let Some(handler_lock) = songbird::get(ctx)
@@ -59,10 +77,10 @@ pub async fn say_saved(ctx: &Context, guild_id: GuildId, file_path: &String) -> 
     Ok(())
 }
 
-async fn get_voice_and_save(
+async fn get_voice(
     input: &str,
     voice: &str,
-    save: bool,
+    save: Option<&str>,
 ) -> Result<bytes::Bytes, std::io::Error> {
     let response = get(format!(
         "https://api.novelai.net/ai/generate-voice?text={}&seed={}&voice=-1&opus=false&version=v2",
@@ -71,21 +89,31 @@ async fn get_voice_and_save(
     match response.await {
         Ok(resp) => {
             if resp.status().is_success() {
-                let bytes = resp
-                    .bytes()
-                    .await
-                    .expect("SOMETHING VERY WRONG HAS HAPPENED SIR");
-                if save {
-                    let mut file = File::create("audio/temp.mpeg").expect("File creation failed");
+                let bytes = match resp.bytes().await {
+                    Ok(b) => b,
+                    Err(_) => {
+                        log::error!(
+                        "Voice request responded sucess but failed to be parsed, contact novel ai"
+                    );
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "failed to read positive response",
+                        ));
+                    }
+                };
+                if let Some(filename) = save {
+                    let mut file = File::create(format!("audio/{:?}.mpeg", filename))
+                        .expect("File creation failed");
                     file.write_all(&bytes).unwrap();
-                    println!("Message received, file saved, all success")
+                    log::info!("Message received, file saved, all success");
                 }
+                log::info!("Message received, bytes sent forward");
                 return Ok(bytes);
             } else {
-                println!("Bad Response: {}", resp.status());
+                log::error!("Bad Response: {}", resp.status());
             }
         }
-        Err(e) => println!("Request failed {}", e),
+        Err(e) => log::error!("Request failed {}", e),
     }
     Err(std::io::Error::new(
         std::io::ErrorKind::Other,

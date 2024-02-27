@@ -14,6 +14,7 @@ pub async fn leave(ctx: PoiseContext<'_>) -> Result<(), Error> {
     if has_handler {
         if let Err(e) = manager.remove(guild_id).await {
             let _ = ctx.channel_id().say(ctx, format!("Failed: {:?}", e)).await;
+            log::error!("Failed to leave vc: {:?}", e);
         }
 
         let _ = ctx.reply("Bye bye :wave:").await;
@@ -21,6 +22,7 @@ pub async fn leave(ctx: PoiseContext<'_>) -> Result<(), Error> {
         *c_id = ChannelId::new(1)
     } else {
         let _ = ctx.reply("Not in a voice channel").await;
+        log::info!("Tried to call leave when no bot in any vc");
     }
 
     Ok(())

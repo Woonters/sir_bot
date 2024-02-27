@@ -1,5 +1,9 @@
-use crate::{Error, PoiseContext, TrackEvent};
+use crate::{
+    sir_error::{self, SirError},
+    Error, PoiseContext, TrackEvent,
+};
 
+use serenity::framework::standard::ArgError;
 use songbird::{events::EventHandler as VoiceEventHandler, Event, EventContext};
 /// Join the Users current Voice chat
 #[poise::command(slash_command, prefix_command)]
@@ -13,9 +17,18 @@ pub async fn join(ctx: PoiseContext<'_>) -> Result<(), Error> {
         (guild.id, channel_id)
     };
     let mut c_id = ctx.data().channel_id.lock().await;
-    *c_id = channel_id.unwrap();
+    match channel_id {
+        Some(value) => *c_id = value,
+        None => {
+            ctx.reply("Please join a voice channel for me to join!")
+                .await
+                .unwrap();
+            return Err(Box::new(sir_error::SirError::NoVoiceIdError));
+        }
+    }
 
     let connect_to = match channel_id {
+        // not sure when this would trigger??
         Some(channel) => channel,
         None => {
             (ctx.reply("Not in a voice channel").await.unwrap());
@@ -47,7 +60,7 @@ impl VoiceEventHandler for TrackErrorNotifier {
     async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
         if let EventContext::Track(track_list) = ctx {
             for (state, handle) in *track_list {
-                println!(
+                log::error!(
                     "Track {:?} encountered an error: {:?}",
                     handle.uuid(),
                     state.playing

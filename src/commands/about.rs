@@ -1,6 +1,5 @@
 use crate::{Error, PoiseContext};
 
-
 /// A simple example command just describes what the bot can do and who the cheeky little gnome is :)
 #[poise::command(prefix_command, slash_command)]
 pub async fn about(ctx: PoiseContext<'_>) -> Result<(), Error> {

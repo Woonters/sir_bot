@@ -1,8 +1,9 @@
 mod commands;
 mod event_handler;
+mod sir_error;
 
+use log::{debug, error, info, log_enabled, Level};
 use poise::serenity_prelude as serenity;
-
 use serde::Deserialize;
 use serenity::{
     all::{ChannelId, UserId},
@@ -33,10 +34,10 @@ async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
     match error {
         poise::FrameworkError::Setup { error, .. } => panic!("Failed to start bot: {:?}", error),
         poise::FrameworkError::Command { error, ctx, .. } => {
-            println!("Error in command '{}' : {:?}", ctx.command().name, error,);
+            log::error!("Error in command '{}' : {:?}", ctx.command().name, error);
         }
         _ => {
-            println!("Unhandled Error!");
+            log::error!("Unhandled Error!");
         }
     }
 }
@@ -69,9 +70,13 @@ impl TypeMapKey for JoinLeaveMessageDatabase {
 // TODO: Clean up this function
 // TODO: A bot command should also run this so I can update join leave messages
 // set up the recorded messages into the database
+// TODO: The error messages are weak in this function, perhaps change to returning a Result?
 async fn set_recorded_messages(data: &Data) {
-    let f = fs::read_to_string("./prerecordedtable.toml").expect("No prerecorded info, please add");
-    let table: HashMap<String, Vec<JoinLeaveMessageExt>> = from_str(&f).unwrap();
+    let f = fs::read_to_string("./prerecordedtable.toml")
+        .expect("failed to read prerecordedmessages.toml");
+    let table: HashMap<String, Vec<JoinLeaveMessageExt>> =
+        from_str(&f).expect("The format of prerecorded table was wrong");
+
     let accounts: &[JoinLeaveMessageExt] = &table["User"];
     let mut new_accounts: HashMap<String, JoinLeaveMessages> = HashMap::new();
     accounts.iter().for_each(|value| {
@@ -86,9 +91,13 @@ async fn set_recorded_messages(data: &Data) {
     });
     let mut write_database = data.join_leave_message_database.lock().await;
     *write_database = new_accounts;
+    info!("set join and leave messages");
 }
+
 #[tokio::main]
 async fn main() {
+    // let's setup the logger
+    env_logger::init();
     let options = poise::FrameworkOptions {
         commands: vec![
             commands::about::about(),
@@ -97,6 +106,7 @@ async fn main() {
             commands::leave::leave(),
             commands::about::help(),
             commands::reload_messages::reload_join_leave_messages(),
+            commands::show_gnome::show_gnome(),
         ],
         prefix_options: poise::PrefixFrameworkOptions {
             prefix: Some("~".into()),
@@ -109,14 +119,10 @@ async fn main() {
         on_error: |error| Box::pin(on_error(error)),
 
         pre_command: |ctx| {
-            Box::pin(
-                async move { println!("Executing Command {}...", ctx.command().qualified_name) },
-            )
+            Box::pin(async move { info!("Executing Command {}", ctx.command().qualified_name) })
         },
         post_command: |ctx| {
-            Box::pin(
-                async move { println!("Executed Command {}...", ctx.command().qualified_name) },
-            )
+            Box::pin(async move { info!("Executed Command {}...", ctx.command().qualified_name) })
         },
         event_handler: |ctx, event, framework, data| {
             Box::pin(event_handler::event_handler(ctx, event, framework, data))
@@ -137,7 +143,6 @@ async fn main() {
         })
         .options(options)
         .build();
-    // that's our prefix, we look for messages with that
 
     let token = env::var("DISCORD_TOKEN").expect("Token error");
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
@@ -147,7 +152,7 @@ async fn main() {
         .await
         .expect("Failed creating discord client");
     if let Err(why) = client.start().await {
-        println!(
+        error!(
             "An Error {} has occurred whilst starting discord client",
             why
         );
