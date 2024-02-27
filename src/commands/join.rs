@@ -1,9 +1,8 @@
 use crate::{
-    sir_error::{self, SirError},
+    sir_error::{self},
     Error, PoiseContext, TrackEvent,
 };
 
-use serenity::framework::standard::ArgError;
 use songbird::{events::EventHandler as VoiceEventHandler, Event, EventContext};
 /// Join the Users current Voice chat
 #[poise::command(slash_command, prefix_command)]
@@ -23,7 +22,7 @@ pub async fn join(ctx: PoiseContext<'_>) -> Result<(), Error> {
             ctx.reply("Please join a voice channel for me to join!")
                 .await
                 .unwrap();
-            return Err(Box::new(sir_error::SirError::NoVoiceIdError));
+            return Err(Box::new(sir_error::SirError::NoVoiceId));
         }
     }
 

@@ -2,7 +2,7 @@ mod commands;
 mod event_handler;
 mod sir_error;
 
-use log::{debug, error, info, log_enabled, Level};
+use log::{error, info};
 use poise::serenity_prelude as serenity;
 use serde::Deserialize;
 use serenity::{

@@ -4,7 +4,7 @@ use rand::seq::SliceRandom;
 use serenity::prelude::Context;
 
 use crate::{commands::say::say_saved, set_recorded_messages, Data, Error};
-use log::{debug, error, info, log_enabled, Level};
+use log::{info};
 
 pub async fn event_handler(
     ctx: &Context,
