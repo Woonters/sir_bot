@@ -45,7 +45,7 @@ Now create the folder which will store all the sounds
 mkdir audio
 ```
 
-Edit `prerecordedtable_example.toml` with user id's and audio clips 
+Edit `prerecordedtable_example.toml` with user ID's and audio clips 
 and then rename it to:
 `prerecordedtable.toml`
 
@@ -60,9 +60,6 @@ TODOs:
 - Lots of pictures of gnomes that cycle
 - An internal voice to fall back on since I can run out of generations / more voices 
 - Editable join and leave messages 
-- Turn any `println!`'s into logging messages 
-- Stop saving messages to TEMP.mpeg, and have a fall back message / use that internal voice 
-- Error messages on say_saved
 - Play YouTube videos
 - Pause, Stop etc. controls
 - Play music from my library maybe?
