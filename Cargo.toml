@@ -2,6 +2,16 @@
 name = "sir_bot"
 version = "1.2.0"
 edition = "2021"
+authors = "Jemma Frost"
+description = "A simple tts discord bot interacting with NovelAI's tts api."
+readme = "./readme.md"
+documentation = "https://githum.com/Fritzbox2000/sir_bot/readme.md"
+homepage = "https://github.com/Fritzbox2000/sir_bot"
+repository = "https://github.com/Fritzbox2000/sir_bot/"
+categories = ["accessibility", "multimedia::audio"]
+license-file = "./LICENSE.md"
+keywords = ["discord bot", "serenity", "gnomes"]
+
 
 
 

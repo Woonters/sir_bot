@@ -74,3 +74,4 @@ TODOs:
 - Pause, Stop etc. controls
 - Play music from my library maybe?
 - trace level logging
+- test suite (more for github actions than anything else)
