@@ -11,13 +11,13 @@ use serenity::{
 };
 use songbird::{events::TrackEvent, SerenityInit};
 
-use std::sync::Arc;
 use std::time::Duration;
 use std::{
     collections::HashMap,
     env,
-    fs::{self},
+    fs::{self, DirBuilder},
 };
+use std::{io::Write, sync::Arc};
 
 use toml::{self, from_str};
 
@@ -94,10 +94,62 @@ async fn set_recorded_messages(data: &Data) {
     info!("set join and leave messages");
 }
 
+async fn download_gnome_images() -> Result<(), Error> {
+    for number in 1..9 {
+        let response = reqwest::get(format!(
+            "https://raw.githubusercontent.com/Fritzbox2000/sir_bot/master/images/gnome_0{}.jpg",
+            number
+        ));
+        match response.await {
+            Ok(resp) => {
+                if resp.status().is_success() {
+                    let bytes = match resp.bytes().await {
+                        Ok(b) => b,
+                        Err(_) => {
+                            log::error!("Getting gnome image {} has failed", number);
+                            return Err(Box::new(std::io::Error::new(
+                                std::io::ErrorKind::Other,
+                                "Failed to get gnome image via request",
+                            )));
+                        }
+                    };
+                    let mut file = fs::File::create(format!("images/gnome_{}.jpg", number))
+                        .expect("File creation failed");
+                    file.write_all(&bytes).unwrap();
+                    log::info!("Saved gnome image");
+                }
+            }
+            Err(e) => log::error!("Request failed {}", e),
+        }
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() {
     // let's setup the logger
     env_logger::init();
+    // do folder setup
+    // check the folders don't exist.
+    let images_folder = fs::create_dir("images");
+    let audio_folder = fs::create_dir("audio");
+    match images_folder {
+        Ok(_) => {
+            download_gnome_images().await.unwrap();
+            log::info!("Images folder created and filled with 9 gnomes");
+        }
+        Err(_) => {
+            log::info!("Images folder already exists so no gnome images were got")
+        }
+    }
+    match audio_folder {
+        Ok(_) => {
+            log::info!("Audio folder created")
+        }
+        Err(_) => {
+            log::info!("Audio folder already exists carrying on")
+        }
+    }
     let options = poise::FrameworkOptions {
         commands: vec![
             commands::about::about(),

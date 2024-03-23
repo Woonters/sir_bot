@@ -40,11 +40,6 @@ DISCORD_TOKEN="..."
 This token is generated when you create the bot, you can only look at it once before you have to re-generate it 
 so make sure to write it down somewhere
 
-Now create the folder which will store all the sounds
-```sh
-mkdir audio
-```
-
 Edit `prerecordedtable_example.toml` with user ID's and audio clips 
 and then rename it to:
 `prerecordedtable.toml`
@@ -53,6 +48,21 @@ Then build and run
 ```sh
 cargo run
 ```
+
+Logging is now available! personal preference means I run:
+```sh
+RUST_LOG="sir_bot=info" ./sir_bot 
+```
+logging levels are: 
+1. error
+2. warn
+3. info
+4. debug
+5. trace
+
+Removing `sir_bot=` will output logging for serentiy and a bunch of other crates I am using 
+which might be useful but mainly only for dev-work. 
+
 
 ## TODO / Dev work
 
@@ -63,3 +73,4 @@ TODOs:
 - Play YouTube videos
 - Pause, Stop etc. controls
 - Play music from my library maybe?
+- trace level logging
