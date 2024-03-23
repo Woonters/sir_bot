@@ -10,7 +10,7 @@ homepage = "https://github.com/Fritzbox2000/sir_bot"
 repository = "https://github.com/Fritzbox2000/sir_bot/"
 categories = ["accessibility", "multimedia::audio"]
 license-file = "./LICENSE.md"
-keywords = ["discord bot", "serenity", "gnomes"]
+keywords = ["discord-bot", "serenity", "gnomes"]
 
 
 
