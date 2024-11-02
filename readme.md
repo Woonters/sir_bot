@@ -75,3 +75,7 @@ TODOs:
 - Play music from my library maybe?
 - trace level logging
 - test suite (more for github actions than anything else)
+
+- I'm getting the rate bot to work now inside this, I need to standardise setting up the database for new installs a bit like the setup script that already exists
+- also add all the relevant info on how it works in readme etc.
+- I really need to switch the database over to using the message_id + channel_id as the primary key since message_id doesn't seem to be actually unique 
