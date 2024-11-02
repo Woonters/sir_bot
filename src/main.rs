@@ -2,6 +2,7 @@ mod commands;
 mod event_handler;
 mod sir_error;
 
+use ::serenity::all::ReactionType;
 use log::{error, info};
 use poise::serenity_prelude as serenity;
 use serde::Deserialize;
@@ -10,6 +11,7 @@ use serenity::{
     prelude::*,
 };
 use songbird::{events::TrackEvent, SerenityInit};
+use sqlx;
 
 use std::time::Duration;
 use std::{
@@ -24,9 +26,46 @@ use toml::{self, from_str};
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type PoiseContext<'a> = poise::Context<'a, Data, Error>;
 pub struct Data {
+    // Is Data the best name??
+    database: sqlx::SqlitePool,
     channel_id: Mutex<ChannelId>,
-    bot_id: Mutex<UserId>,
     join_leave_message_database: Mutex<HashMap<String, JoinLeaveMessages>>,
+    reactions: Vec<ReactionType>,
+}
+
+impl Data {
+    pub fn new(
+        database: sqlx::SqlitePool,
+        channel_id: Mutex<ChannelId>,
+        join_leave_message_database: Mutex<HashMap<String, JoinLeaveMessages>>,
+    ) -> Self {
+        let _ = channel_id;
+        Self {
+            database,
+            channel_id,
+            join_leave_message_database,
+            reactions: [
+                // The ordering and design of this vector is IMPERATIVE, getting the rating of the message
+                // relys on binary searching this list and getting the relevant number from the index of the found value, moving anything or adding new emojis
+                // before the 🔟 will result in all ratings being invalid an badly calculated any new reactions added will have score values of 11 upwards and if unordered will create
+                // undefined behaviour (Best avoided)
+                "0️⃣".to_owned(),
+                "1️⃣".to_owned(),
+                "2️⃣".to_owned(),
+                "3️⃣".to_owned(),
+                "4️⃣".to_owned(),
+                "5️⃣".to_owned(),
+                "6️⃣".to_owned(),
+                "7️⃣".to_owned(),
+                "8️⃣".to_owned(),
+                "9️⃣".to_owned(),
+                "🔟".to_owned(),
+            ]
+            .iter()
+            .map(|v| ReactionType::Unicode(v.clone()))
+            .collect(),
+        }
+    }
 }
 
 async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
@@ -181,16 +220,29 @@ async fn main() {
         },
         ..Default::default()
     };
+    let database = sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect_with(
+            sqlx::sqlite::SqliteConnectOptions::new()
+                .filename("database.sqlite")
+                .create_if_missing(true),
+        )
+        .await
+        .expect("couldn't connect to the database");
+    sqlx::migrate!("./migrations")
+        .run(&database)
+        .await
+        .expect("Couldn't run database migrations");
     let framework = poise::Framework::builder()
         .setup(move |ctx, _ready, framework| {
             Box::pin(async move {
                 println!("Logged in as {}", _ready.user.name);
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                Ok(Data {
-                    channel_id: Mutex::new(ChannelId::new(1)),
-                    bot_id: Mutex::new(UserId::new(1)),
-                    join_leave_message_database: Mutex::new(HashMap::new()),
-                })
+                Ok(Data::new(
+                    database,
+                    Mutex::new(ChannelId::new(1)),
+                    Mutex::new(HashMap::new()),
+                ))
             })
         })
         .options(options)
