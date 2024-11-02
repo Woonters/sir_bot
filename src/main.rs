@@ -97,7 +97,7 @@ async fn set_recorded_messages(data: &Data) {
 async fn download_gnome_images() -> Result<(), Error> {
     for number in 1..9 {
         let response = reqwest::get(format!(
-            "https://raw.githubusercontent.com/Fritzbox2000/sir_bot/master/images/gnome_0{}.jpg",
+            "https://raw.githubusercontent.com/woonters/sir_bot/master/images/gnome_0{}.jpg",
             number
         ));
         match response.await {
