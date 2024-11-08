@@ -3,3 +3,5 @@
 prerecordedtable.toml
 .vscode
 .env
+database.sqlite
+

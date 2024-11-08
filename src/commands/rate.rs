@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 
 use serenity::all::{
-    ArgumentConvert, CacheHttp, ChannelId, Message, ReactionType, ReactionTypes, UserId,
+    ArgumentConvert, CacheHttp, ChannelId, Message, MessageId, ReactionType, UserId,
 };
 use sqlx;
 
 use crate::{Error, PoiseContext};
 use poise::CreateReply;
 
-#[poise::command(prefix_command, slash_command)]
+#[poise::command(prefix_command, slash_command, aliases("rate"))]
 pub async fn rate_me(ctx: PoiseContext<'_>) -> Result<(), Error> {
     let reply =
         CreateReply::default().content(format!("You have a score of {}", get_score(ctx).await));
@@ -17,8 +17,10 @@ pub async fn rate_me(ctx: PoiseContext<'_>) -> Result<(), Error> {
 }
 
 async fn get_score(ctx: PoiseContext<'_>) -> f32 {
+    log::trace!("Get score");
     // get the user's messages
     let messages = get_user_messages(ctx).await;
+    log::trace!("Got {} messages ", messages.len());
     let mut counter = 0;
     let mut score = 0.0;
 
@@ -45,19 +47,24 @@ async fn get_user_messages(ctx: PoiseContext<'_>) -> Vec<Message> {
     // for each message_id get the message related
     // this is actually kinda hard and uses a function I don't realy like
     let mut out: Vec<Message> = Vec::new();
+    log::trace!("Found {} messages in the database", search.len());
     for message in search {
-        let message_id = format!("{}", message.message_id);
-        let msg = Message::convert(
-            ctx,
-            ctx.guild_id(),
-            Some(ChannelId::new(message.channel_id as u64)),
-            &message_id,
-        )
-        .await;
+        let msg = ctx
+            .http()
+            .get_message(
+                ChannelId::new(message.channel_id as u64),
+                MessageId::new(message.message_id as u64),
+            )
+            .await;
         match msg {
             Ok(good_message) => out.push(good_message),
-            Err(_) => {
-                todo!()
+            Err(e) => {
+                log::warn!(
+                    "Couldn't find message {} in channel {} from error: {}",
+                    message.message_id,
+                    message.channel_id,
+                    e
+                );
             }
         }
     }
@@ -66,17 +73,19 @@ async fn get_user_messages(ctx: PoiseContext<'_>) -> Vec<Message> {
 
 fn get_message_score(message: Message, reactions: &[ReactionType]) -> f32 {
     let reacts = get_valid_message_reacts(message, reactions);
+    log::trace!("Got the scores {:?}", reacts);
     // currently we will just calculate the mean for each message
     // this might change in the future for doing better analytics
     let mut total = 0;
     let mut number = 0;
     for (rate, count) in reacts {
-        total += rate;
+        total += rate * count as usize;
         number += count;
     }
     if number == 0 {
         return 0.0;
     }
+    log::trace!("total: {} | number of total reacts: {}", total, number);
     (total as f32) / (number as f32)
 }
 

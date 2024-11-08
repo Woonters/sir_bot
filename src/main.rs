@@ -83,7 +83,7 @@ async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
 
 // Structs for reading the toml of join and leave messages
 #[derive(Deserialize, Debug)]
-struct JoinLeaveMessageExt {
+pub struct JoinLeaveMessageExt {
     id: String,
     #[serde(flatten)]
     inner: JoinLeaveMessages,
@@ -91,7 +91,7 @@ struct JoinLeaveMessageExt {
 
 // Struct for internal use of join leave messages, the ID is the key allowing for quick searching
 #[derive(Deserialize, Debug)]
-struct JoinLeaveMessages {
+pub struct JoinLeaveMessages {
     name: String,
     join: Vec<String>,
     leave: Vec<String>,
@@ -198,6 +198,7 @@ async fn main() {
             commands::about::help(),
             commands::reload_messages::reload_join_leave_messages(),
             commands::show_gnome::show_gnome(),
+            commands::rate::rate_me(),
         ],
         prefix_options: poise::PrefixFrameworkOptions {
             prefix: Some("~".into()),
